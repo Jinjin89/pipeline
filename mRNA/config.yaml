@@ -1,0 +1,47 @@
+#############################################
+# Preface
+# 1) using python function to generate the shell code(Give up)
+# 2) run using snakemake
+# 3) timing for each sample in each step
+# 4) reference
+# 4.1). https://docs.gdc.cancer.gov/Data/Bioinformatics_Pipelines/Expression_mRNA_Pipeline/
+# 4.2). https://github.com/ACSoupir/Bioinformatics_YouTube
+# 4.3). https://github.com/akahles/icgc_rnaseq_align
+# 4.4). https://www.reneshbedre.com/blog/star-aligner-twopass-mode.html
+#############################################
+
+#############################################
+# I.O. configs
+# input_file:
+# 1). sample: sample name
+# 2). R1 and R2 column
+#############################################
+
+input_file: test.csv
+
+output_directory: /home/data/sunqiangqiang/test/mrnav2/results
+
+ref: /home/data/sunqiangqiang/ref/hg38_star
+ref_fa: /home/data/sunqiangqiang/ref/hg38/Homo_sapiens_assembly38.fasta 
+gtf: /home/data/sunqiangqiang/ref/gtf/gencode.v36.annotation.gtf
+
+#############################################
+# Software position and parameters
+#############################################
+
+# 1) fastp
+fastp: /home/sunqiangqiang/app/conda/envs/bio/bin/fastp
+fastp_threads: 2
+reads_to_process: 0
+
+# 2) STAR
+star: /home/sunqiangqiang/app/conda/envs/bio/bin/STAR
+star_threads: 8
+
+# 3) samtools
+samtools: /home/sunqiangqiang/app/conda/envs/bio/bin/samtools
+samtools_threads: 1
+
+# 4) stringtie
+stringtie: /home/sunqiangqiang/app/conda/envs/bio/bin/stringtie 
+stringtie_threads: 12

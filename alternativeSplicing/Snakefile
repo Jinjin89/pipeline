@@ -1,0 +1,166 @@
+configfile: "config.yaml"
+
+import pandas as pd
+import glob
+import os 
+
+samples_df = pd.read_csv(config["sample_meta"])
+samples_df.set_index(samples_df["sample"],inplace=True)
+samples_list = samples_df["sample"].to_list()
+
+def getBAM(wildcards,input_df = samples_df):
+    return samples_df.at[wildcards.sample,"bam"]
+
+def path_generator(input_list):
+    return "/".join(input_list)
+
+
+print("="*50)
+print("How many samples input?")
+print(len(samples_list))
+print("="*50)
+print("write bam list into txt file")
+if not os.path.isdir(config["output_dir"]):
+    print("directory not found, generate it")
+    os.mkdir(config["output_dir"])
+
+samples_df["bam"].to_csv(path_generator([config["output_dir"],"bams.txt"]),index=None,header=None)
+print("============>end of data preparations<============")
+print("="*50)
+
+rule all:
+    input: 
+        #expand(path_generator([config["output_dir"],"spladder","genes_graph_conf2.{sample}.Aligned.sortedByCoord.out.count.hdf5"]),sample = samples_list)
+        #path_generator([config["output_dir"],"spladder","genes_graph_conf2.merge_graphs.count.hdf5"])
+        #expand(path_generator([config["output_dir"],"spladder","genes_graph_conf2.merge_graphs.{sample}.Aligned.sortedByCoord.out.count.hdf5"]),sample = samples_list),
+        #path_generator([config["output_dir"],"tmp","spladder3_collect.done"])
+        path_generator([config["output_dir"],"tmp","spladder4.done"])
+
+rule spladder1:
+    input:
+        bam = getBAM
+    output:
+        done = path_generator([config["output_dir"],"spladder","genes_graph_conf2.{sample}.Aligned.sortedByCoord.out.count.hdf5"]),
+        tmp_dir = directory(path_generator([config["output_dir"],"tmp","tmp_{sample}"]))
+    threads: config["spladder_single_thread"]
+    params:
+        spladder= config["spladder"],
+        gtf = config["gtf"],
+        dir =  config["output_dir"]
+    shell:
+        '''
+        [[ ! -d {params.dir} ]] && mkdir -p {params.dir}
+        {params.spladder} build -b {input.bam} \
+               -a {params.gtf} \
+               -o {params.dir}\
+               --confidence 2\
+               --no-extract-ase \
+               --parallel {threads}\
+               --merge-strat single\
+               --sparse-bam\
+               --tmp-dir {output.tmp_dir}
+        '''
+
+rule spladder2:
+    input:
+        bam_list = path_generator([config["output_dir"],"bams.txt"]),
+        spladder_single_list = expand(path_generator([config["output_dir"],"spladder","genes_graph_conf2.{sample}.Aligned.sortedByCoord.out.count.hdf5"]),sample = samples_list)
+    output:
+        merge_graphs = path_generator([config["output_dir"],"spladder","genes_graph_conf2.merge_graphs.count.hdf5"])
+    threads: config["spladder_multiple_threads"]
+    params:
+        spladder= config["spladder"],
+        gtf = config["gtf"],
+        dir =  config["output_dir"]
+
+    shell:
+        '''
+        {params.spladder} build -b {input.bam_list} \
+               -a {params.gtf} \
+               -o {params.dir}\
+               --confidence 2\
+               --sparse-bam\
+               --no-extract-ase \
+               --parallel {threads}\
+               --merge-strat merge_graphs
+        '''
+rule spladder3:
+    input:
+        bam = getBAM,
+        merged_graph = path_generator([config["output_dir"],"spladder","genes_graph_conf2.merge_graphs.count.hdf5"])
+    output:
+        merge_graph_each_count = path_generator([config["output_dir"],"spladder","genes_graph_conf2.merge_graphs.{sample}.Aligned.sortedByCoord.out.count.hdf5"])
+    threads: config["spladder_single_thread"]
+    params:
+        spladder= config["spladder"],
+        gtf = config["gtf"],
+        dir =  config["output_dir"]
+
+    shell:
+        '''
+        [[ ! -d {params.dir} ]] && mkdir -p {params.dir}
+        {params.spladder} build -b {input.bam} \
+               -a {params.gtf} \
+               -o {params.dir}\
+               --confidence 2\
+               --parallel {threads}\
+               --sparse-bam\
+               --merge-strat merge_graphs\
+               --quantify-graph\
+               --no-extract-ase \
+               --qmode single
+        '''
+
+rule spladder3_collect:
+    input:
+        bam_list =  path_generator([config["output_dir"],"bams.txt"]),
+        merge_graph_each_count = expand(path_generator([config["output_dir"],"spladder","genes_graph_conf2.merge_graphs.{sample}.Aligned.sortedByCoord.out.count.hdf5"]),sample = samples_list)
+    output:
+        spladder3_collect_done = path_generator([config["output_dir"],"tmp","spladder3_collect.done"])
+    threads: config["spladder_multiple_threads"]
+    params:
+        spladder= config["spladder"],
+        gtf = config["gtf"],
+        dir =  config["output_dir"]
+
+    shell:
+        '''
+        {params.spladder} build -b {input.bam_list} \
+               -a {params.gtf} \
+               -o {params.dir}\
+               --confidence 2\
+               --sparse-bam\
+               --no-extract-ase \
+               --parallel {threads}\
+               --merge-strat merge_graphs\
+               --quantify-graph\
+               --qmode collect
+        touch {output.spladder3_collect_done}
+        '''
+
+
+rule spladder4:
+    input:
+        bam_list =  path_generator([config["output_dir"],"bams.txt"]),
+        spladder3_collect_done = path_generator([config["output_dir"],"tmp","spladder3_collect.done"])
+    output:
+        spladder4_done = path_generator([config["output_dir"],"tmp","spladder4.done"])
+    threads: config["spladder_multiple_threads"]
+    params:
+        spladder= config["spladder"],
+        gtf = config["gtf"],
+        dir =  config["output_dir"]
+
+    shell:
+        '''
+        {params.spladder} build -b {input.bam_list} \
+               -a {params.gtf} \
+               -o {params.dir}\
+               --sparse-bam\
+               --confidence 2\
+               --event-types exon_skip,intron_retention,alt_3prime,alt_5prime,mutex_exons\
+               --parallel {threads}
+
+        touch {output.spladder4_done}
+
+        '''

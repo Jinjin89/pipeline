@@ -1,0 +1,16 @@
+# test file 
+# sample_meta: "/home/data/sunqiangqiang/test/spladder/sm/meta.csv"
+# output_dir: "/home/data/sunqiangqiang/test/spladder/results"
+
+# project file
+sample_meta: "/home/data/sunqiangqiang/project/blca_as/pipeline/alternativeSplicing/meta.csv"
+output_dir: "/home/data/sunqiangqiang/project/blca_as/results/alternativeSplicing"
+
+
+# 1.) spladder file position
+spladder: "/home/sunqiangqiang/app/conda/envs/bio/bin/spladder"
+spladder_single_thread: 1
+spladder_multiple_threads: 32
+
+# 2.) hg38
+gtf: "/home/data/sunqiangqiang/ref/gtf/gencode.v36.annotation.gtf"
