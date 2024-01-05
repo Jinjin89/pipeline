@@ -48,12 +48,16 @@ class pe_sample:
         print("="*50)
         output_meta_file = path_generator([self.output_dir,"meta.csv"])
         if os.path.isfile(output_meta_file):
-            print("meta data found ,skip! please check the meta data is consistent with input_file, or you could delete it and rerun snakemake with snakemake -np")
+            print("meta data found ,skip! please check the meta data\nis consistent with input_file, or you could delete\nit and rerun snakemake with snakemake -np")
         else:
             print("meta data not found, create it with input_file")
+            # 1) clean reads postion
             self.samples_df["R1_qc"] = [path_generator([self.output_dir,str(x),"step01_qc",str(x)+".trim.R1.fq.gz"]) for x in self.samples_df[self.sample_column]]
             self.samples_df["R2_qc"] = [path_generator([self.output_dir,str(x),"step01_qc",str(x)+".trim.R2.fq.gz"]) for x in self.samples_df[self.sample_column]]
+            # 2) aligned bam postion
             self.samples_df["bam"] = [path_generator([self.output_dir,str(x),"step02_align",str(x)+".Aligned.sortedByCoord.out.bam"]) for x in self.samples_df[self.sample_column]]
+            # 3) expression file position
+            self.samples_df["gene_expression"] = [path_generator([self.output_dir,str(x),"step03_gene_abundance",str(x)+"_expression.txt"]) for x in self.samples_df[self.sample_column]]
             print("meta data shape:(should have same rows with input_file)")
             print(self.samples_df.shape)
             self.samples_df.to_csv(output_meta_file,index=None)
@@ -87,10 +91,8 @@ rule all:
     input:
         # 1) get clean data
         # expand(path_generator([config["output_directory"],"{sample}","step01_qc","{sample}.html"]),sample = samples)
-
         # 2) get align data 
         #expand(path_generator([config["output_directory"],"{sample}","step02_align","{sample}.Aligned.sortedByCoord.out.bam.bai"]),sample = samples)
-        
         # 3) stringtie -> gene expression
         expand(path_generator([config["output_directory"],"{sample}","step03_gene_abundance","{sample}_expression.txt"]),sample = samples)
 
@@ -222,7 +224,6 @@ rule bamIndex:
         '''
         {params.tool} index  -@ {threads} {input.bam}
         '''
-
 
 rule stringtie:
     input: 

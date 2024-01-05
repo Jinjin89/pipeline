@@ -16,11 +16,17 @@
 # 1). sample: sample name
 # 2). R1 and R2 column
 #############################################
+#input_file: blca_sample_meta.csv
+#output_directory: /home/data/sunqiangqiang/project/blca_as/results/mRNA
 
+
+#############################################
+# >>>>>>>>>>>>>>>>>>>TEST<<<<<<<<<<<<<<<<<<<
+#############################################
 input_file: test.csv
-
 output_directory: /home/data/sunqiangqiang/test/mrnav2/results
 
+# hg38 reference
 ref: /home/data/sunqiangqiang/ref/hg38_star
 ref_fa: /home/data/sunqiangqiang/ref/hg38/Homo_sapiens_assembly38.fasta 
 gtf: /home/data/sunqiangqiang/ref/gtf/gencode.v36.annotation.gtf
@@ -44,4 +50,4 @@ samtools_threads: 1
 
 # 4) stringtie
 stringtie: /home/sunqiangqiang/app/conda/envs/bio/bin/stringtie 
-stringtie_threads: 12
+stringtie_threads: 1
