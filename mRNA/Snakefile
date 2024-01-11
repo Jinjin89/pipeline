@@ -56,6 +56,7 @@ class pe_sample:
             self.samples_df["R2_qc"] = [path_generator([self.output_dir,str(x),"step01_qc",str(x)+".trim.R2.fq.gz"]) for x in self.samples_df[self.sample_column]]
             # 2) aligned bam postion
             self.samples_df["bam"] = [path_generator([self.output_dir,str(x),"step02_align",str(x)+".Aligned.sortedByCoord.out.bam"]) for x in self.samples_df[self.sample_column]]
+            self.samples_df["counts"] = [path_generator([self.output_dir,str(x),"step02_align",str(x)+".ReadsPerGene.out.tab"]) for x in self.samples_df[self.sample_column]]
             # 3) expression file position
             self.samples_df["gene_expression"] = [path_generator([self.output_dir,str(x),"step03_gene_abundance",str(x)+"_expression.txt"]) for x in self.samples_df[self.sample_column]]
             print("meta data shape:(should have same rows with input_file)")
@@ -94,8 +95,10 @@ rule all:
         # 2) get align data 
         #expand(path_generator([config["output_directory"],"{sample}","step02_align","{sample}.Aligned.sortedByCoord.out.bam.bai"]),sample = samples)
         # 3) stringtie -> gene expression
-        expand(path_generator([config["output_directory"],"{sample}","step03_gene_abundance","{sample}_expression.txt"]),sample = samples)
-
+        #expand(path_generator([config["output_directory"],"{sample}","step03_gene_abundance","{sample}_expression.txt"]),sample = samples)
+        #expand(path_generator([config["output_directory"],"{sample}","step04_gene_fusion","star-fusion.fusion_predictions.tsv"]),sample = samples)
+        #path_generator([config["output_directory"],'done','mRNA.done']),
+        path_generator([config["output_directory"],'done','starFusion.done'])
 rule fastp:
     input:
         fq1 = samples_info.R1,
@@ -246,4 +249,52 @@ rule stringtie:
             -o {output.gtf}\
             -A {output.expression}\
             -e
+        '''
+
+rule starFusion:
+    input:
+        fq1 = path_generator([config["output_directory"],"{sample}","step01_qc","{sample}.trim.R1.fq.gz"]),
+        fq2 = path_generator([config["output_directory"],"{sample}","step01_qc","{sample}.trim.R2.fq.gz"])
+    output: 
+        starFusion = path_generator([config["output_directory"],"{sample}","step04_gene_fusion","star-fusion.fusion_predictions.tsv"])
+    threads: config["starFusion_threads"]
+    params:
+        ctat_genome_lib_build_dir = config['ctat_genome_lib_build_dir'],
+        STAR_PATH = config['starFusion_star'],
+        tool = config["starFusion"],
+        dir = path_generator([config["output_directory"],"{sample}","step04_gene_fusion"])
+    shell:
+        '''
+        {params.tool}\
+            --left_fq {input.fq1} \
+            --right_fq {input.fq2} \
+            --genome_lib_dir {params.ctat_genome_lib_build_dir}\
+            -O {params.dir}\
+            --CPU {threads}\
+            --STAR_PATH {params.STAR_PATH}
+        '''
+
+# done file
+
+rule mRNADoneFile:
+    input:expand(path_generator([config["output_directory"],"{sample}","step03_gene_abundance","{sample}_expression.txt"]),sample = samples)
+    output: path_generator([config["output_directory"],'done','mRNA.done'])
+    params: path_generator([config["output_directory"],'done'])
+    shell: 
+        '''
+        [[ ! -d {params} ]] && mkdir -p {params}
+        touch {output}
+
+        '''
+
+
+rule starFusionDoneFile:
+    input:expand(path_generator([config["output_directory"],"{sample}","step03_gene_abundance","{sample}_expression.txt"]),sample = samples)
+    output: path_generator([config["output_directory"],'done','starFusion.done'])
+    params: path_generator([config["output_directory"],'done'])
+    shell: 
+        '''
+        [[ ! -d {params} ]] && mkdir -p {params}
+        touch {output}
+
         '''

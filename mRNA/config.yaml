@@ -31,6 +31,9 @@ ref: /home/data/sunqiangqiang/ref/hg38_star
 ref_fa: /home/data/sunqiangqiang/ref/hg38/Homo_sapiens_assembly38.fasta 
 gtf: /home/data/sunqiangqiang/ref/gtf/gencode.v36.annotation.gtf
 
+# STAR-Fusion reference
+ctat_genome_lib_build_dir: /home/sunqiangqiang/data/ref/CTAT/GRCh38_gencode_v37_CTAT_lib_Mar012021.source/ctat_genome_lib_build_dir
+
 #############################################
 # Software position and parameters
 #############################################
@@ -51,3 +54,8 @@ samtools_threads: 1
 # 4) stringtie
 stringtie: /home/sunqiangqiang/app/conda/envs/bio/bin/stringtie 
 stringtie_threads: 1
+
+# 5) star_fusion
+starFusion : /home/sunqiangqiang/app/conda/envs/starFusionPy2/bin/STAR-Fusion
+starFusion_star: /home/sunqiangqiang/app/conda/envs/starFusionPy2/bin/STAR
+starFusion_threads: 8
