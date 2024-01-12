@@ -84,21 +84,27 @@ print("How many samples input?")
 print(len(samples))
 print("============>end of data preparations<============")
 print("="*50)
-#############################################
-# Rules
-#############################################
+########################################################################
+# Rule all
+########################################################################
 
 rule all:
     input:
         # 1) get clean data
-        # expand(path_generator([config["output_directory"],"{sample}","step01_qc","{sample}.html"]),sample = samples)
+        expand(path_generator([config["output_directory"],"{sample}","step01_qc","{sample}.html"]),sample = samples),
         # 2) get align data 
-        #expand(path_generator([config["output_directory"],"{sample}","step02_align","{sample}.Aligned.sortedByCoord.out.bam.bai"]),sample = samples)
+        #expand(path_generator([config["output_directory"],"{sample}","step02_align","{sample}.Aligned.sortedByCoord.out.bam.bai"]),sample = samples),
         # 3) stringtie -> gene expression
-        #expand(path_generator([config["output_directory"],"{sample}","step03_gene_abundance","{sample}_expression.txt"]),sample = samples)
-        #expand(path_generator([config["output_directory"],"{sample}","step04_gene_fusion","star-fusion.fusion_predictions.tsv"]),sample = samples)
+        #expand(path_generator([config["output_directory"],"{sample}","step03_gene_abundance","{sample}_expression.txt"]),sample = samples),
+        #expand(path_generator([config["output_directory"],"{sample}","step04_gene_fusion","star-fusion.fusion_predictions.tsv"]),sample = samples),
         #path_generator([config["output_directory"],'done','mRNA.done']),
-        path_generator([config["output_directory"],'done','starFusion.done'])
+        #path_generator([config["output_directory"],'done','starFusion.done']),
+        path_generator([config["output_directory"],'done','arriba.done'])
+
+########################################################################
+# fast-QC
+########################################################################
+
 rule fastp:
     input:
         fq1 = samples_info.R1,
@@ -131,6 +137,12 @@ rule fastp:
         --reads_to_process {params.reads_to_process}\
         -j {output.json} >{output.log}
         '''
+
+
+
+########################################################################
+# star two pass
+########################################################################
 
 rule star1pass:
     input:
@@ -227,6 +239,9 @@ rule bamIndex:
         '''
         {params.tool} index  -@ {threads} {input.bam}
         '''
+########################################################################
+# stringtie mRNA
+########################################################################
 
 rule stringtie:
     input: 
@@ -251,6 +266,11 @@ rule stringtie:
             -e
         '''
 
+
+########################################################################
+# gene-fusion star Fusion
+########################################################################
+
 rule starFusion:
     input:
         fq1 = path_generator([config["output_directory"],"{sample}","step01_qc","{sample}.trim.R1.fq.gz"]),
@@ -274,8 +294,58 @@ rule starFusion:
             --STAR_PATH {params.STAR_PATH}
         '''
 
-# done file
+########################################################################
+# gene_fusion -> arriba
+########################################################################
 
+rule arriba:
+    input:
+        fq1 = path_generator([config["output_directory"],"{sample}","step01_qc","{sample}.trim.R1.fq.gz"]),
+        fq2 = path_generator([config["output_directory"],"{sample}","step01_qc","{sample}.trim.R2.fq.gz"])
+
+    output:
+        arriba_fusion_results = path_generator([config["output_directory"],"{sample}","step05_arriba","{sample}_fusion.tsv"]),
+        arriba_fusion_discard = path_generator([config["output_directory"],"{sample}","step05_arriba","{sample}_fusion_discarded.tsv"])
+        # sj_out_tab = samples_info.output_sj_dir + "{sample}.SJ.out.tab"
+    threads: config["arriba_threads"]
+    params:
+        sample_dir=path_generator([config["output_directory"],"{sample}","step05_arriba"]),
+        star= config["star"],
+        arriba = config["arriba"],
+        ref = config["ref"],
+        ref_fa = config["ref_fa"],
+        gtf = config["gtf"],
+        arriba_black_list=config['arriba_black_list'],
+        arriba_known_fusions=config['arriba_known_fusions'],
+        arriba_protein_domains=config['arriba_protein_domains'],
+        dir = path_generator([config["output_directory"],"{sample}","step05_arriba"]),
+        prefix = path_generator([config["output_directory"],"{sample}","step02_align","{sample}."])
+    shell:
+        '''
+        [[ ! -d {params.dir} ]] && mkdir -p {params.dir}
+        cd {params.sample_dir}
+        {params.star} \
+            --runThreadN 8 \
+            --genomeDir {params.ref} --genomeLoad NoSharedMemory \
+            --readFilesIn {input.fq1} {input.fq2} --readFilesCommand zcat \
+            --outStd BAM_Unsorted --outSAMtype BAM Unsorted --outSAMunmapped Within --outBAMcompression 0 \
+            --outFilterMultimapNmax 50 --peOverlapNbasesMin 10 --alignSplicedMateMapLminOverLmate 0.5 --alignSJstitchMismatchNmax 5 -1 5 5 \
+            --chimSegmentMin 10 --chimOutType WithinBAM HardClip --chimJunctionOverhangMin 10 --chimScoreDropMax 30 \
+            --chimScoreJunctionNonGTAG 0 --chimScoreSeparation 1 --chimSegmentReadGapMax 3 --chimMultimapNmax 50 |
+        {params.arriba} \
+            -x /dev/stdin \
+            -o {output.arriba_fusion_results} -O {output.arriba_fusion_discard} \
+            -a {params.ref_fa} \
+            -g {params.gtf} \
+            -b {params.arriba_black_list} \
+            -k {params.arriba_known_fusions}\
+            -t {params.arriba_known_fusions} \
+            -p {params.arriba_protein_domains}
+        '''
+
+########################################################################
+# done file
+########################################################################
 rule mRNADoneFile:
     input:expand(path_generator([config["output_directory"],"{sample}","step03_gene_abundance","{sample}_expression.txt"]),sample = samples)
     output: path_generator([config["output_directory"],'done','mRNA.done'])
@@ -284,9 +354,7 @@ rule mRNADoneFile:
         '''
         [[ ! -d {params} ]] && mkdir -p {params}
         touch {output}
-
         '''
-
 
 rule starFusionDoneFile:
     input:expand(path_generator([config["output_directory"],"{sample}","step03_gene_abundance","{sample}_expression.txt"]),sample = samples)
@@ -296,5 +364,13 @@ rule starFusionDoneFile:
         '''
         [[ ! -d {params} ]] && mkdir -p {params}
         touch {output}
-
+        '''
+rule arribaDoneFile:
+    input:expand(path_generator([config["output_directory"],"{sample}","step05_arriba","{sample}_fusion.tsv"]),sample = samples)
+    output: path_generator([config["output_directory"],'done','arriba.done'])
+    params: path_generator([config["output_directory"],'done'])
+    shell: 
+        '''
+        [[ ! -d {params} ]] && mkdir -p {params}
+        touch {output}
         '''

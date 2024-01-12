@@ -31,9 +31,6 @@ ref: /home/data/sunqiangqiang/ref/hg38_star
 ref_fa: /home/data/sunqiangqiang/ref/hg38/Homo_sapiens_assembly38.fasta 
 gtf: /home/data/sunqiangqiang/ref/gtf/gencode.v36.annotation.gtf
 
-# STAR-Fusion reference
-ctat_genome_lib_build_dir: /home/sunqiangqiang/data/ref/CTAT/GRCh38_gencode_v37_CTAT_lib_Mar012021.source/ctat_genome_lib_build_dir
-
 #############################################
 # Software position and parameters
 #############################################
@@ -41,7 +38,7 @@ ctat_genome_lib_build_dir: /home/sunqiangqiang/data/ref/CTAT/GRCh38_gencode_v37_
 # 1) fastp
 fastp: /home/sunqiangqiang/app/conda/envs/bio/bin/fastp
 fastp_threads: 2
-reads_to_process: 0
+reads_to_process: 10000
 
 # 2) STAR
 star: /home/sunqiangqiang/app/conda/envs/bio/bin/STAR
@@ -59,3 +56,14 @@ stringtie_threads: 1
 starFusion : /home/sunqiangqiang/app/conda/envs/starFusionPy2/bin/STAR-Fusion
 starFusion_star: /home/sunqiangqiang/app/conda/envs/starFusionPy2/bin/STAR
 starFusion_threads: 8
+
+# STAR-Fusion reference
+ctat_genome_lib_build_dir: /home/sunqiangqiang/data/ref/CTAT/GRCh38_gencode_v37_CTAT_lib_Mar012021.source/ctat_genome_lib_build_dir
+
+# 5) arriba
+arriba: /home/sunqiangqiang/app/conda/envs/bio/bin/arriba
+arriba_black_list: /home/sunqiangqiang/app/conda/envs/bio/var/lib/arriba/blacklist_hg38_GRCh38_v2.4.0.tsv.gz
+arriba_known_fusions: /home/sunqiangqiang/app/conda/envs/bio/var/lib/arriba/known_fusions_hg38_GRCh38_v2.4.0.tsv.gz
+arriba_protein_domains: /home/sunqiangqiang/app/conda/envs/bio/var/lib/arriba/protein_domains_hg38_GRCh38_v2.4.0.gff3
+
+arriba_threads: 8
