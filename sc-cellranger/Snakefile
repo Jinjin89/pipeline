@@ -1,0 +1,150 @@
+configfile: "config.yaml"
+#############################################
+# Functions
+# 1) Using pandas to read samples metadata
+#############################################
+
+import pandas as pd
+import os
+
+class pe_sample:
+    def __init__(self,input_sample_meta_file,sample_column = "sample",R1_column = "R1",R2_column = "R2",output_dir = "results"):        # the input params
+        self.sample_meta_file = input_sample_meta_file
+        self.sample_column = sample_column
+        self.R1_column = R1_column
+        self.R2_column = R2_column
+        # the output params
+        self.output_dir = output_dir
+        print("="*50)
+        if not os.path.isdir(self.output_dir):
+            print("output direcory not found, create it!")
+            print(self.output_dir)
+            os.mkdir(self.output_dir)
+        else:
+            print("output direcory found, skip!")
+
+    def read_sample_file(self):
+        if self.sample_meta_file.endswith("csv"):
+            self.samples_df = pd.read_csv(self.sample_meta_file)
+        elif self.sample_meta_file.endswith("txt") or self.sample_meta_file.endswith("tsv"):
+            self.samples_df = pd.read_table(self.sample_meta_file,sep = "\t")
+        else:
+            print("please supply sample metadata with csv/txt/tsv format!")
+            exit("###############################\nThere is something wrong, you know, I only accept the files with csv/txt/tsv extension!\n###############################")
+
+        # 1) get all the samples
+        self.all_samples = self.samples_df[self.sample_column].unique().tolist()
+        # 3) set index
+        self.samples_df["index"] = self.samples_df[self.sample_column]
+        self.samples_df.set_index("index",inplace=True)
+
+    def R1(self,wildcards):
+        return self.samples_df.at[wildcards.sample,"R1"]
+
+    def R2(self,wildcards):
+        return self.samples_df.at[wildcards.sample,"R2"]
+    
+    def outputMetadata(self):
+        print("="*50)
+        output_meta_file = path_generator([self.output_dir,"meta.csv"])
+        if os.path.isfile(output_meta_file):
+            print("meta data found ,skip! please check the meta data\nis consistent with input_file, or you could delete\nit and rerun snakemake with snakemake -np")
+        else:
+            print("meta data not found, create it with input_file")
+            # 1) reanme reads
+            self.samples_df["R1_rename"] = [path_generator([self.output_dir,"step01_rename",str(x)+"_S0_L001_R1_001.fastq.gz"]) for x in self.samples_df[self.sample_column]]
+            self.samples_df["R2_rename"] = [path_generator([self.output_dir,"step01_rename",str(x)+"_S0_L001_R2_001.fastq.gz"]) for x in self.samples_df[self.sample_column]]
+            print("meta data shape:(should have same rows with input_file)")
+            print(self.samples_df.shape)
+            self.samples_df.to_csv(output_meta_file,index=None)
+
+def path_generator(input_list):
+    return "/".join(input_list)
+
+
+#############################################
+# load configs
+#############################################
+
+samples_info = pe_sample(config["input_file"],output_dir = config["output_directory"])
+
+# 1) get samples
+samples_info.read_sample_file()
+samples_info.outputMetadata()
+
+# create dir
+samples = samples_info.all_samples
+# print(samples_info.samples_df)
+print("="*50)
+print("How many samples input?")
+print(len(samples))
+print("============>end of data preparations<============")
+print("="*50)
+print(samples)
+samples = 'HRR858164'
+
+#############################################
+# Rules
+#############################################
+
+rule all:
+    input: 
+        # expand(path_generator([config['output_directory'],'step01_rename','{sample}_S0_L001_R1_001.fastq.gz']),sample = samples)
+        expand(path_generator([config["output_directory"],"step02_outs",'{sample}','outs','filtered_feature_bc_matrix','matrix.mtx.gz']),sample = samples)
+
+rule step01_rename:
+    input:
+        R1= samples_info.R1,
+        R2= samples_info.R2
+    output:
+        R1= path_generator([config['output_directory'],'step01_rename','{sample}_S0_L001_R1_001.fastq.gz']),
+        R2= path_generator([config['output_directory'],'step01_rename','{sample}_S0_L001_R2_001.fastq.gz'])
+    params:
+        dir = path_generator([config["output_directory"],"step01_rename"]),
+        cellranger = config['cellranger'],
+        ref = config['ref'],
+        memory = config['memory']
+    shell:
+        '''
+
+         [[ ! -d {params.dir} ]] && mkdir -p {params.dir}
+
+         ln -s {input.R1} {output.R1}
+         ln -s {input.R2} {output.R2}
+
+        '''
+
+rule step02_count:
+    input:
+        R1= path_generator([config['output_directory'],'step01_rename','{sample}_S0_L001_R1_001.fastq.gz']),
+        R2= path_generator([config['output_directory'],'step01_rename','{sample}_S0_L001_R2_001.fastq.gz'])
+    output:
+        barcode = path_generator([config["output_directory"],"step02_outs",'{sample}','outs','filtered_feature_bc_matrix','barcodes.tsv.gz']),
+        features = path_generator([config["output_directory"],"step02_outs",'{sample}','outs','filtered_feature_bc_matrix','features.tsv.gz']),
+        matrix = path_generator([config["output_directory"],"step02_outs",'{sample}','outs','filtered_feature_bc_matrix','matrix.mtx.gz'])
+
+    params:
+        fqs = path_generator([config["output_directory"],"step01_rename"]),
+        sample = '{sample}',
+        cellranger = config['cellranger'],
+        ref = config['ref'],
+        memory = config['memory'],
+        tmp_dir =  path_generator([config["output_directory"],'tmp']),
+        log_dir = path_generator([config["output_directory"],".log"]),
+        log_name = path_generator([config["output_directory"],".log",'{sample}_step02.log'])
+
+    threads: config['threads']
+    shell: 
+        '''
+        [[ ! -d {params.tmp_dir} ]] && mkdir -p {params.tmp_dir};
+        cd {params.tmp_dir};
+
+        [[ ! -d {params.log_dir} ]] && mkdir -p {params.log_dir};
+
+        {params.cellranger} count --id={params.sample} \
+                        --transcriptome={params.ref} \
+                        --fastqs={params.fqs} \
+                        --sample={params.sample} \
+                        --localcores={threads} \
+                        --localmem={params.memory} > {params.log_name}
+        '''

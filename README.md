@@ -81,14 +81,22 @@ done
 ### 1.5 mutation calling
 
 
+
 ## 2. WES
 
 
 ## 3. WGS
 
-
 ## 4. panel
 
+
+## 5. single-cell
+
+## 5.1 cellranger
+
+1. prepare reference data
+2. prepare fastq data
+   1. name conversion
 
 [^1]: https://github.com/STAR-Fusion/STAR-Fusion-Tutorial/wiki
 [^2]: https://github.com/STAR-Fusion/STAR-Fusion/wiki
