@@ -1,5 +1,5 @@
 # cellranger software
-cellranger: /home/keke/data2/app/cellranger-7.1.0/bin/cellranger
+cellranger: /home/keke/data2/app/cellranger-7.2.0/bin/cellranger
 ref: /home/keke/data2/ref/refdata-gex-GRCh38-2020-A
 memory: 64
 threads: 12
@@ -8,5 +8,4 @@ threads: 12
 input_file: /home/keke/data/tutorial/pipeline/sc-cellranger/sample.csv
 
 # the results directory
-output_directory: /home/keke/base/test/cellranger/HRA003647
-
+output_directory: /home/keke/base/raw/tmp

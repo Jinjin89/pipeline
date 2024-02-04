@@ -81,7 +81,6 @@ print(len(samples))
 print("============>end of data preparations<============")
 print("="*50)
 print(samples)
-samples = 'HRR858164'
 
 #############################################
 # Rules
@@ -90,7 +89,7 @@ samples = 'HRR858164'
 rule all:
     input: 
         # expand(path_generator([config['output_directory'],'step01_rename','{sample}_S0_L001_R1_001.fastq.gz']),sample = samples)
-        expand(path_generator([config["output_directory"],"step02_outs",'{sample}','outs','filtered_feature_bc_matrix','matrix.mtx.gz']),sample = samples)
+        expand(path_generator([config["output_directory"],"step02_outs",'{sample}','{sample}','{sample}','outs','filtered_feature_bc_matrix','matrix.mtx.gz']),sample = samples)
 
 rule step01_rename:
     input:
@@ -106,7 +105,6 @@ rule step01_rename:
         memory = config['memory']
     shell:
         '''
-
          [[ ! -d {params.dir} ]] && mkdir -p {params.dir}
 
          ln -s {input.R1} {output.R1}
@@ -119,9 +117,9 @@ rule step02_count:
         R1= path_generator([config['output_directory'],'step01_rename','{sample}_S0_L001_R1_001.fastq.gz']),
         R2= path_generator([config['output_directory'],'step01_rename','{sample}_S0_L001_R2_001.fastq.gz'])
     output:
-        barcode = path_generator([config["output_directory"],"step02_outs",'{sample}','outs','filtered_feature_bc_matrix','barcodes.tsv.gz']),
-        features = path_generator([config["output_directory"],"step02_outs",'{sample}','outs','filtered_feature_bc_matrix','features.tsv.gz']),
-        matrix = path_generator([config["output_directory"],"step02_outs",'{sample}','outs','filtered_feature_bc_matrix','matrix.mtx.gz'])
+        barcode = path_generator([config["output_directory"],"step02_outs",'{sample}','{sample}','{sample}','outs','filtered_feature_bc_matrix','barcodes.tsv.gz']),
+        features = path_generator([config["output_directory"],"step02_outs",'{sample}','{sample}','{sample}','outs','filtered_feature_bc_matrix','features.tsv.gz']),
+        matrix = path_generator([config["output_directory"],"step02_outs",'{sample}','{sample}','{sample}','outs','filtered_feature_bc_matrix','matrix.mtx.gz'])
 
     params:
         fqs = path_generator([config["output_directory"],"step01_rename"]),
@@ -129,22 +127,24 @@ rule step02_count:
         cellranger = config['cellranger'],
         ref = config['ref'],
         memory = config['memory'],
-        tmp_dir =  path_generator([config["output_directory"],'tmp']),
+        results_dir =  path_generator([config["output_directory"]]),
+        output_dir =  path_generator([config["output_directory"],'{sample}']),
         log_dir = path_generator([config["output_directory"],".log"]),
         log_name = path_generator([config["output_directory"],".log",'{sample}_step02.log'])
 
     threads: config['threads']
     shell: 
         '''
-        [[ ! -d {params.tmp_dir} ]] && mkdir -p {params.tmp_dir};
-        cd {params.tmp_dir};
-
+        [[ ! -d {params.results_dir} ]] && mkdir -p {params.results_dir};
         [[ ! -d {params.log_dir} ]] && mkdir -p {params.log_dir};
+
+        cd {params.results_dir};
 
         {params.cellranger} count --id={params.sample} \
                         --transcriptome={params.ref} \
                         --fastqs={params.fqs} \
                         --sample={params.sample} \
                         --localcores={threads} \
+                        --output-dir={params.output_dir}\
                         --localmem={params.memory} > {params.log_name}
         '''
