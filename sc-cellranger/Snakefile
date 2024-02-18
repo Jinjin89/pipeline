@@ -8,9 +8,10 @@ import pandas as pd
 import os
 
 class pe_sample:
-    def __init__(self,input_sample_meta_file,sample_column = "sample",R1_column = "R1",R2_column = "R2",output_dir = "results"):        # the input params
+    def __init__(self,input_sample_meta_file,sample_column = "sample",lane = 'lane',R1_column = "R1",R2_column = "R2",output_dir = "results"):        # the input params
         self.sample_meta_file = input_sample_meta_file
         self.sample_column = sample_column
+        self.lane = lane
         self.R1_column = R1_column
         self.R2_column = R2_column
         # the output params
@@ -34,29 +35,80 @@ class pe_sample:
 
         # 1) get all the samples
         self.all_samples = self.samples_df[self.sample_column].unique().tolist()
-        # 3) set index
-        self.samples_df["index"] = self.samples_df[self.sample_column]
-        self.samples_df.set_index("index",inplace=True)
+        # 4) get all the unique lan id
+        self.samples_df[self.lane] = self.samples_df.groupby(self.sample_column).cumcount() + 1
 
-    def R1(self,wildcards):
-        return self.samples_df.at[wildcards.sample,"R1"]
+    # CRX107889_S0_L001_R2_001.fastq.gz
+    def R1_rename(self):
+        samples_now = self.samples_df[self.sample_column]
+        lane_now = self.samples_df[self.lane]
+        res = []
+        for s,l in zip(samples_now,lane_now):
+            l_tmp = "L001"
+            l = str(l)
+            l_l = -len(l)
+            l = str(l_tmp[:l_l]) + l
+            new_file_name = '_'.join([str(s),"S0",str(l),"R1_001.fastq.gz"])
+            new_file_name = path_generator([self.output_dir,"step01_rename",new_file_name])
+            res.append(new_file_name)
+        return res
 
-    def R2(self,wildcards):
-        return self.samples_df.at[wildcards.sample,"R2"]
+    def R2_rename(self):
+        samples_now = self.samples_df[self.sample_column]
+        lane_now = self.samples_df[self.lane]
+        res = []
+        for s,l in zip(samples_now,lane_now):
+            l_tmp = "L001"
+            l = str(l)
+            l_l = -len(l)
+            l = str(l_tmp[:l_l]) + l
+            new_file_name = '_'.join([str(s),"S0",str(l),"R2_001.fastq.gz"])
+            new_file_name = path_generator([self.output_dir,"step01_rename",new_file_name])
+            res.append(new_file_name)
+        return res
     
-    def outputMetadata(self):
+    def runlink(self):
+        r1_files = self.samples_df[self.R1_column]
+        r1_new = self.samples_df["R1_rename"]
+        r2_files = self.samples_df[self.R2_column]
+        r2_new = self.samples_df["R2_rename"]
+        # get output link directory
+        new_dir = path_generator([self.output_dir,"step01_rename"])
+        if not os.path.isdir(new_dir):
+            print('output dire not found, build it!')
+            os.mkdir(new_dir)
+        for source,target in zip(r1_files,r1_new): 
+            if not os.path.islink(str(target)):
+                print(target)
+                try:
+                    print("create link")
+                    os.symlink(source,target)
+                except OSError as e:
+                    print(f"Error creating symbolic link: {e}")
+
+        for source,target in zip(r2_files,r2_new): 
+            if not os.path.islink(str(target)):
+                print(target)
+                print(os.path.islink(str(target)))
+                try:
+                    print("create link")
+                    os.symlink(source,target)
+                except OSError as e:
+                    print(f"Error creating symbolic link: {e}")
+
+    def get_meta(self):
         print("="*50)
-        output_meta_file = path_generator([self.output_dir,"meta.csv"])
-        if os.path.isfile(output_meta_file):
-            print("meta data found ,skip! please check the meta data\nis consistent with input_file, or you could delete\nit and rerun snakemake with snakemake -np")
-        else:
-            print("meta data not found, create it with input_file")
-            # 1) reanme reads
-            self.samples_df["R1_rename"] = [path_generator([self.output_dir,"step01_rename",str(x)+"_S0_L001_R1_001.fastq.gz"]) for x in self.samples_df[self.sample_column]]
-            self.samples_df["R2_rename"] = [path_generator([self.output_dir,"step01_rename",str(x)+"_S0_L001_R2_001.fastq.gz"]) for x in self.samples_df[self.sample_column]]
-            print("meta data shape:(should have same rows with input_file)")
-            print(self.samples_df.shape)
-            self.samples_df.to_csv(output_meta_file,index=None)
+        self.samples_df["R1_rename"] = self.R1_rename()
+        self.samples_df["R2_rename"] = self.R2_rename()
+        print("meta data shape:(should have same rows with input_file)")
+
+
+    def getSample(self,wildcards):
+        df = self.samples_df[self.samples_df[self.sample_column ]== wildcards.sample]
+        R1 = df["R1_rename"].tolist()
+        R2 = df["R2_rename"].tolist()
+        return R1 + R2
+
 
 def path_generator(input_list):
     return "/".join(input_list)
@@ -70,7 +122,10 @@ samples_info = pe_sample(config["input_file"],output_dir = config["output_direct
 
 # 1) get samples
 samples_info.read_sample_file()
-samples_info.outputMetadata()
+samples_info.get_meta()
+
+# 2) generate the link files, skip if exsits
+samples_info.runlink()
 
 # create dir
 samples = samples_info.all_samples
@@ -78,9 +133,9 @@ samples = samples_info.all_samples
 print("="*50)
 print("How many samples input?")
 print(len(samples))
+print(samples)
 print("============>end of data preparations<============")
 print("="*50)
-print(samples)
 
 #############################################
 # Rules
@@ -88,38 +143,15 @@ print(samples)
 
 rule all:
     input: 
-        # expand(path_generator([config['output_directory'],'step01_rename','{sample}_S0_L001_R1_001.fastq.gz']),sample = samples)
-        expand(path_generator([config["output_directory"],"step02_outs",'{sample}','{sample}','{sample}','outs','filtered_feature_bc_matrix','matrix.mtx.gz']),sample = samples)
+        expand(path_generator([config["output_directory"],"step02_outs",'{sample}','outs','filtered_feature_bc_matrix','matrix.mtx.gz']),sample = samples)
 
-rule step01_rename:
+rule cellranger:
     input:
-        R1= samples_info.R1,
-        R2= samples_info.R2
+        samples_info.getSample
     output:
-        R1= path_generator([config['output_directory'],'step01_rename','{sample}_S0_L001_R1_001.fastq.gz']),
-        R2= path_generator([config['output_directory'],'step01_rename','{sample}_S0_L001_R2_001.fastq.gz'])
-    params:
-        dir = path_generator([config["output_directory"],"step01_rename"]),
-        cellranger = config['cellranger'],
-        ref = config['ref'],
-        memory = config['memory']
-    shell:
-        '''
-         [[ ! -d {params.dir} ]] && mkdir -p {params.dir}
-
-         ln -s {input.R1} {output.R1}
-         ln -s {input.R2} {output.R2}
-
-        '''
-
-rule step02_count:
-    input:
-        R1= path_generator([config['output_directory'],'step01_rename','{sample}_S0_L001_R1_001.fastq.gz']),
-        R2= path_generator([config['output_directory'],'step01_rename','{sample}_S0_L001_R2_001.fastq.gz'])
-    output:
-        barcode = path_generator([config["output_directory"],"step02_outs",'{sample}','{sample}','{sample}','outs','filtered_feature_bc_matrix','barcodes.tsv.gz']),
-        features = path_generator([config["output_directory"],"step02_outs",'{sample}','{sample}','{sample}','outs','filtered_feature_bc_matrix','features.tsv.gz']),
-        matrix = path_generator([config["output_directory"],"step02_outs",'{sample}','{sample}','{sample}','outs','filtered_feature_bc_matrix','matrix.mtx.gz'])
+        barcode = path_generator([config["output_directory"],"step02_outs",'{sample}','outs','filtered_feature_bc_matrix','barcodes.tsv.gz']),
+        features = path_generator([config["output_directory"],"step02_outs",'{sample}','outs','filtered_feature_bc_matrix','features.tsv.gz']),
+        matrix = path_generator([config["output_directory"],"step02_outs",'{sample}','outs','filtered_feature_bc_matrix','matrix.mtx.gz'])
 
     params:
         fqs = path_generator([config["output_directory"],"step01_rename"]),
@@ -128,7 +160,8 @@ rule step02_count:
         ref = config['ref'],
         memory = config['memory'],
         results_dir =  path_generator([config["output_directory"]]),
-        output_dir =  path_generator([config["output_directory"],'{sample}']),
+        tmp_dir =  path_generator([config["output_directory"],'step02_outs','{sample}']),
+        output_dir = path_generator([config["output_directory"],'step02_outs','{sample}']),
         log_dir = path_generator([config["output_directory"],".log"]),
         log_name = path_generator([config["output_directory"],".log",'{sample}_step02.log'])
 
@@ -137,8 +170,10 @@ rule step02_count:
         '''
         [[ ! -d {params.results_dir} ]] && mkdir -p {params.results_dir};
         [[ ! -d {params.log_dir} ]] && mkdir -p {params.log_dir};
+        [[ -d {params.tmp_dir} ]] && rm -r {params.tmp_dir};
+        [[ ! -d {params.tmp_dir} ]] && mkdir -p {params.tmp_dir};
 
-        cd {params.results_dir};
+        cd {params.log_dir};
 
         {params.cellranger} count --id={params.sample} \
                         --transcriptome={params.ref} \
@@ -146,5 +181,7 @@ rule step02_count:
                         --sample={params.sample} \
                         --localcores={threads} \
                         --output-dir={params.output_dir}\
-                        --localmem={params.memory} > {params.log_name}
+                        --localmem={params.memory} > {params.log_name};
+        wait;
+
         '''
